@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:int="http://www.springframework.org/schema/integration"
+	xmlns:file="http://www.springframework.org/schema/integration/file"
+	xmlns:feed="http://www.springframework.org/schema/integration/feed"
+	xsi:schemaLocation="http://www.springframework.org/schema/integration/feed http://www.springframework.org/schema/integration/feed/spring-integration-feed.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/integration/file http://www.springframework.org/schema/integration/file/spring-integration-file.xsd
+		http://www.springframework.org/schema/integration http://www.springframework.org/schema/integration/spring-integration.xsd">
+
+	<!-- 
+		Define a Spring Integration flow that reads blog posts from Spring IO’s RSS feed, 
+		transforms them into an easily readable String consisting of the post title and the URL for the post, 
+		and appends that String to the end of a file /tmp/si/SpringBlog.
+
+		To define an integration flow, you simply create a Spring XML configuration with a handful of elements from Spring Integration’s XML namespaces. 
+		Specifically, for the desired integration flow, you work with elements from these Spring Integration namespaces: core, feed, and file
+	 -->
+
+	<!-- 
+		An inbound adapter that retrieves the posts, one per poll. 
+		As configured here, it polls every 5 seconds. 
+		The posts are placed into a channel named "news" (corresponding with the adapter’s ID).
+		
+		auto.startup will be true by default which means the posts will be fetched when the application starts.
+	 -->
+    <feed:inbound-channel-adapter id="news" url="http://spring.io/blog.atom" auto-startup="${auto.startup:true}">
+        <int:poller fixed-rate="5000"/>
+    </feed:inbound-channel-adapter>
+
+	<!-- 
+		Transforms entries (com.rometools.rome.feed.synd.SyndEntry) in the "news" channel, 
+		extracting the entry’s title (payload.title) and link (payload.link) 
+		and concatenating them into a readable String (adding a newline). 
+		The String is then sent to the output channel named "file".
+	 -->
+    <int:transformer
+            input-channel="news"
+            expression="payload.title + ' @ ' + payload.link + '#{systemProperties['line.separator']}'"
+            output-channel="file"/>
+
+	<!-- 
+		An outbound channel adapter that writes content from its channel (here named "file") to a file. 
+		Specifically, as configured here, it will append anything in the "file" channel to a file at /tmp/si/SpringBlog.
+		
+		For filename-generator-expression, default will be SpringBlog but can be overridden with a property.
+	 -->
+    <file:outbound-channel-adapter id="file"
+            mode="APPEND"
+            charset="UTF-8"
+            directory="/tmp/si"
+            filename-generator-expression="'${feed.file.name:SpringBlog}'"/>
+
+</beans>
